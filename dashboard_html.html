@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RuuviTag Dashboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <style>
+        :root {
+            /* Light theme variables */
+            --bg-primary: #f5f5f5;
+            --bg-secondary: #ffffff;
+            --text-primary: #333333;
+            --text-secondary: #666666;
+            --text-muted: #888888;
+            --border-color: #eeeeee;
+            --border-light: #dddddd;
+            --shadow: rgba(0,0,0,0.1);
+            --gradient-start: #667eea;
+            --gradient-end: #764ba2;
+        }
+
+        [data-theme="dark"] {
+            /* Dark theme variables */
+            --bg-primary: #1a1a1a;
+            --bg-secondary: #2d2d2d;
+            --text-primary: #ffffff;
+            --text-secondary: #cccccc;
+            --text-muted: #999999;
+            --border-color: #404040;
+            --border-light: #555555;
+            --shadow: rgba(0,0,0,0.3);
+            --gradient-start: #4f46e5;
+            --gradient-end: #7c3aed;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .header {
+            background: linear-gradient(135deg, var(--gradient-start) 0%, var(--gradient-end) 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            text-align: center;
+            position: relative;
+        }
+        .theme-toggle {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(255,255,255,0.2);
+            border: none;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s ease;
+        }
+        .theme-toggle:hover {
+            background: rgba(255,255,255,0.3);
+        }
+        .controls {
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px var(--shadow);
+            transition: background-color 0.3s ease, box-shadow 0.3s ease;
+        }
+        .device-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .device-card {
+            background: var(--bg-secondary);
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 10px var(--shadow);
+            transition: transform 0.2s, background-color 0.3s ease, box-shadow 0.3s ease;
+        }
+        .device-card:hover {
+            transform: translateY(-2px);
+        }
+        .device-title {
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: var(--text-primary);
+        }
+        .metric {
+            display: flex;
+            justify-content: space-between;
+            margin: 8px 0;
+            padding: 5px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .metric:last-child {
+            border-bottom: none;
+        }
+        .metric-label {
+            color: var(--text-secondary);
+        }
+        .metric-value {
+            font-weight: bold;
+            color: var(--text-primary);
+        }
+        .chart-container {
+            background: var(--bg-secondary);
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px var(--shadow);
+            transition: background-color 0.3s ease, box-shadow 0.3s ease;
+        }
+        .chart-container h3 {
+            color: var(--text-primary);
+            margin-top: 0;
+        }
+        .chart-canvas {
+            position: relative;
+            height: 400px;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-secondary);
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 10px;
+        }
+        .status-online { background-color: #4CAF50; }
+        .status-offline { background-color: #f44336; }
+        select, button {
+            padding: 8px 12px;
+            border: 1px solid var(--border-light);
+            border-radius: 5px;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            margin-right: 10px;
+            transition: background-color 0.3s ease, border-color 0.3s ease;
+        }
+        button, .btn {
+            background: var(--gradient-start);
+            color: white;
+            border: none;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            text-align: center;
+        }
+        button:hover, .btn:hover {
+            background: var(--gradient-end);
+        }
+        .timestamp {
+            font-size: 0.9em;
+            color: var(--text-muted);
+        }
+        @media (max-width: 768px) {
+            .device-grid {
+                grid-template-columns: 1fr;
+            }
+            .controls {
+                flex-direction: column;
+                gap: 10px;
+            }
+            .theme-toggle {
+                position: relative;
+                top: auto;
+                right: auto;
+                margin: 10px auto 0;
+                display: block;
+            }
+        }
+        
+        /* Dark mode specific adjustments for charts */
+        [data-theme="dark"] .chart-container canvas {
+            filter: brightness(0.9);
+        }
+        
+        /* Scrollbar styling for dark mode */
+        [data-theme="dark"] ::-webkit-scrollbar {
+            width: 8px;
+        }
+        [data-theme="dark"] ::-webkit-scrollbar-track {
+            background: var(--bg-primary);
+        }
+        [data-theme="dark"] ::-webkit-scrollbar-thumb {
+            background: var(--border-light);
+            border-radius: 4px;
+        }
+        [data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+            background: var(--text-secondary);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <button class="theme-toggle" onclick="toggleTheme()" title="Theme umschalten">
+                <span id="theme-icon">🌙</span>
+            </button>
+            <h1>🌡️ RuuviTag Dashboard</h1>
+            <p>Live-Monitoring Ihrer Sensordaten</p>
+        </div>
+
+        <div class="controls">
+            <label>Zeitraum: </label>
+            <select id="timeRange">
+                <option value="1">1 Stunde</option>
+                <option value="6">6 Stunden</option>
+                <option value="24" selected>24 Stunden</option>
+                <option value="168">7 Tage</option>
+            </select>
+            
+            <label>Gerät: </label>
+            <select id="deviceSelect">
+                <option value="all">Alle Geräte</option>
+            </select>
+            
+            <button onclick="refreshData()">🔄 Aktualisieren</button>
+            <button onclick="toggleAutoRefresh()">⏯️ Auto-Refresh</button>
+            <a href="/export" class="btn" style="padding: 8px 12px; background: var(--gradient-start); color: white; text-decoration: none; border-radius: 5px; margin-left: 10px;">📤 Export</a>
+            
+            <span id="lastUpdate" class="timestamp"></span>
+            
+            <div style="margin-top: 10px; font-size: 0.9em; color: var(--text-muted);">
+                🕐 Zeitzone: <span id="timezoneInfo"></span>
+            </div>
+        </div>
+
+        <div id="deviceCards" class="device-grid">
+            <div class="loading">Lade Geräte...</div>
+        </div>
+
+        <div class="chart-container">
+            <h3>Temperatur-Verlauf</h3>
+            <div class="chart-canvas">
+                <canvas id="temperatureChart"></canvas>
+            </div>
+        </div>
+
+        <div class="chart-container">
+            <h3>Luftfeuchtigkeit & Luftdruck</h3>
+            <div class="chart-canvas">
+                <canvas id="environmentChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let devices = [];
+        let currentData = [];
+        let autoRefreshInterval = null;
+        let temperatureChart = null;
+        let environmentChart = null;
+
+        // Utility functions for timezone handling
+        function parseTimestamp(timestamp) {
+            // Handle SQLite DATETIME format without timezone info
+            if (timestamp && !timestamp.includes('T') && !timestamp.includes('Z')) {
+                // SQLite format: "2025-08-12 20:25:39" → treat as UTC and convert to local
+                return new Date(timestamp.replace(' ', 'T') + 'Z');
+            }
+            // Handle ISO format or other formats
+            return new Date(timestamp);
+        }
+
+        function formatLocalTime(timestamp, includeDate = false) {
+            const date = parseTimestamp(timestamp);
+            if (includeDate) {
+                return date.toLocaleString('de-DE');
+            } else {
+                return date.toLocaleTimeString('de-DE');
+            }
+        }
+
+        function formatLocalDate(timestamp) {
+            const date = parseTimestamp(timestamp);
+            return date.toLocaleDateString('de-DE');
+        }
+
+        function getTimezoneInfo() {
+            const now = new Date();
+            const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+            const offset = -now.getTimezoneOffset() / 60;
+            const offsetStr = offset >= 0 ? `+${offset}` : `${offset}`;
+            return `${timezone} (UTC${offsetStr})`;
+        }
+
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', function() {
+            initTheme();
+            initCharts();
+            loadDevices();
+            refreshData();
+            startAutoRefresh();
+            
+            // Show timezone info
+            document.getElementById('timezoneInfo').textContent = getTimezoneInfo();
+            
+            // Event listeners
+            document.getElementById('timeRange').addEventListener('change', refreshData);
+            document.getElementById('deviceSelect').addEventListener('change', refreshData);
+        });
+
+        function initCharts() {
+            const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+            const textColor = isDark ? '#ffffff' : '#333333';
+            const gridColor = isDark ? '#404040' : '#e0e0e0';
+            
+            // Temperature Chart
+            const tempCtx = document.getElementById('temperatureChart').getContext('2d');
+            temperatureChart = new Chart(tempCtx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: []
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    scales: {
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'Temperatur (°C)',
+                                color: textColor
+                            },
+                            ticks: {
+                                color: textColor
+                            },
+                            grid: {
+                                color: gridColor
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Zeit',
+                                color: textColor
+                            },
+                            ticks: {
+                                color: textColor
+                            },
+                            grid: {
+                                color: gridColor
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            labels: {
+                                color: textColor
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Environment Chart (Humidity & Pressure)
+            const envCtx = document.getElementById('environmentChart').getContext('2d');
+            environmentChart = new Chart(envCtx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: []
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    scales: {
+                        y: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            title: {
+                                display: true,
+                                text: 'Luftfeuchtigkeit (%)',
+                                color: textColor
+                            },
+                            ticks: {
+                                color: textColor
+                            },
+                            grid: {
+                                color: gridColor
+                            }
+                        },
+                        y1: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            title: {
+                                display: true,
+                                text: 'Luftdruck (hPa)',
+                                color: textColor
+                            },
+                            ticks: {
+                                color: textColor
+                            },
+                            grid: {
+                                drawOnChartArea: false,
+                                color: gridColor
+                            },
+                        },
+                        x: {
+                            ticks: {
+                                color: textColor
+                            },
+                            grid: {
+                                color: gridColor
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            labels: {
+                                color: textColor
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        async function loadDevices() {
+            try {
+                console.log('Loading devices...');
+                const response = await fetch('/api/devices');
+                console.log('Response status:', response.status);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const result = await response.json();
+                console.log('API Response:', result);
+                
+                if (result.success && result.data) {
+                    devices = result.data;
+                    console.log('Loaded devices:', devices);
+                    updateDeviceSelect();
+                    updateDeviceCards();
+                } else {
+                    throw new Error(result.error || 'Invalid API response');
+                }
+            } catch (error) {
+                console.error('Error loading devices:', error);
+                document.getElementById('deviceCards').innerHTML = 
+                    `<div class="loading">Fehler beim Laden der Geräte: ${error.message}</div>`;
+            }
+        }
+
+        function updateDeviceSelect() {
+            const select = document.getElementById('deviceSelect');
+            select.innerHTML = '<option value="all">Alle Geräte</option>';
+            
+            devices.forEach(device => {
+                const option = document.createElement('option');
+                option.value = device.address;
+                option.textContent = `${device.ruuvi_mac || device.address} (${device.total_readings} Messungen)`;
+                select.appendChild(option);
+            });
+        }
+
+        function updateDeviceCards() {
+            const container = document.getElementById('deviceCards');
+            
+            if (devices.length === 0) {
+                container.innerHTML = '<div class="loading">Keine Geräte gefunden</div>';
+                return;
+            }
+
+            container.innerHTML = devices.map(device => {
+                const lastSeen = parseTimestamp(device.last_seen);
+                const isOnline = (Date.now() - lastSeen.getTime()) < 300000; // 5 minutes
+                
+                // Check if we have sampling data (from averaged logger)
+                const hasSamplingData = device.avg_samples_per_reading && device.total_samples;
+                const samplingInfo = hasSamplingData ? 
+                    `<div class="metric">
+                        <span class="metric-label">Durchschn. Samples/Reading:</span>
+                        <span class="metric-value">${Math.round(device.avg_samples_per_reading || 1)}</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Gesamt-Samples:</span>
+                        <span class="metric-value">${device.total_samples}</span>
+                    </div>` : '';
+                
+                return `
+                    <div class="device-card">
+                        <div class="device-title">
+                            <span class="status-indicator ${isOnline ? 'status-online' : 'status-offline'}"></span>
+                            ${device.ruuvi_mac || device.address}
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Letzte Aktualisierung:</span>
+                            <span class="metric-value">${formatLocalTime(device.last_seen, true)}</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">DB-Einträge:</span>
+                            <span class="metric-value">${device.total_readings}</span>
+                        </div>
+                        ${samplingInfo}
+                        <div class="metric">
+                            <span class="metric-label">Ø Temperatur:</span>
+                            <span class="metric-value">${device.avg_temperature ? Math.round(device.avg_temperature * 10) / 10 : '-'}°C</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Ø Luftfeuchtigkeit:</span>
+                            <span class="metric-value">${device.avg_humidity ? Math.round(device.avg_humidity) : '-'}%</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Batterie:</span>
+                            <span class="metric-value">${device.min_battery || '-'} - ${device.max_battery || '-'} mV</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Status:</span>
+                            <span class="metric-value">${isOnline ? 'Online' : 'Offline'}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        async function refreshData() {
+            const timeRange = document.getElementById('timeRange').value;
+            const selectedDevice = document.getElementById('deviceSelect').value;
+            
+            try {
+                console.log(`Refreshing data: timeRange=${timeRange}, device=${selectedDevice}`);
+                let url = `/api/timerange?hours=${timeRange}`;
+                if (selectedDevice !== 'all') {
+                    url = `/api/device/${selectedDevice}?hours=${timeRange}`;
+                }
+                
+                console.log('Fetching:', url);
+                const response = await fetch(url);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const result = await response.json();
+                console.log('Data API Response:', result);
+                
+                if (result.success && result.data) {
+                    currentData = result.data;
+                    console.log('Loaded data points:', currentData.length);
+                    updateCharts();
+                    document.getElementById('lastUpdate').textContent = 
+                        `Letzte Aktualisierung: ${formatLocalTime(new Date().toISOString(), true)} (${getTimezoneInfo()})`;
+                } else {
+                    throw new Error(result.error || 'Invalid API response');
+                }
+                
+            } catch (error) {
+                console.error('Error refreshing data:', error);
+                document.getElementById('lastUpdate').textContent = 
+                    `Fehler: ${error.message}`;
+            }
+        }
+
+        function updateCharts() {
+            updateTemperatureChart();
+            updateEnvironmentChart();
+        }
+
+        function updateTemperatureChart() {
+            const deviceGroups = groupDataByDevice(currentData);
+            const colors = ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'];
+            
+            // Create unified timeline from all data points
+            const allTimestamps = [...new Set(currentData.map(d => d.created_at))].sort();
+            const labels = allTimestamps.map(ts => formatLocalTime(ts));
+            
+            const datasets = Object.keys(deviceGroups).map((deviceAddr, index) => {
+                const deviceData = deviceGroups[deviceAddr];
+                const deviceName = devices.find(d => d.address === deviceAddr)?.ruuvi_mac || deviceAddr;
+                
+                // Create data array aligned with unified timeline
+                const alignedData = allTimestamps.map(timestamp => {
+                    const reading = deviceData.find(r => r.created_at === timestamp);
+                    return reading && reading.temperature_c !== null ? reading.temperature_c : null;
+                });
+                
+                return {
+                    label: deviceName,
+                    data: alignedData,
+                    borderColor: colors[index % colors.length],
+                    backgroundColor: colors[index % colors.length] + '20',
+                    tension: 0.1,
+                    spanGaps: false, // Don't connect across gaps
+                    pointRadius: 2,
+                    pointHoverRadius: 4
+                };
+            });
+
+            temperatureChart.data.labels = labels;
+            temperatureChart.data.datasets = datasets;
+            temperatureChart.update();
+        }
+
+        function updateEnvironmentChart() {
+            const deviceGroups = groupDataByDevice(currentData);
+            const colors = ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'];
+            
+            // Create unified timeline from all data points
+            const allTimestamps = [...new Set(currentData.map(d => d.created_at))].sort();
+            const labels = allTimestamps.map(ts => formatLocalTime(ts));
+            
+            const datasets = [];
+            
+            // Humidity and Pressure datasets for each device
+            Object.keys(deviceGroups).forEach((deviceAddr, index) => {
+                const deviceData = deviceGroups[deviceAddr];
+                const deviceName = devices.find(d => d.address === deviceAddr)?.ruuvi_mac || deviceAddr;
+                
+                // Create aligned data arrays for humidity and pressure
+                const alignedHumidity = allTimestamps.map(timestamp => {
+                    const reading = deviceData.find(r => r.created_at === timestamp);
+                    return reading && reading.humidity_percent !== null ? reading.humidity_percent : null;
+                });
+                
+                const alignedPressure = allTimestamps.map(timestamp => {
+                    const reading = deviceData.find(r => r.created_at === timestamp);
+                    return reading && reading.pressure_hpa !== null ? reading.pressure_hpa : null;
+                });
+                
+                // Humidity dataset
+                datasets.push({
+                    label: `${deviceName} - Luftfeuchtigkeit`,
+                    data: alignedHumidity,
+                    borderColor: colors[index % colors.length],
+                    backgroundColor: colors[index % colors.length] + '20',
+                    yAxisID: 'y',
+                    tension: 0.1,
+                    spanGaps: false,
+                    pointRadius: 2,
+                    pointHoverRadius: 4
+                });
+                
+                // Pressure dataset
+                datasets.push({
+                    label: `${deviceName} - Luftdruck`,
+                    data: alignedPressure,
+                    borderColor: colors[index % colors.length],
+                    backgroundColor: colors[index % colors.length] + '40',
+                    borderDash: [5, 5],
+                    yAxisID: 'y1',
+                    tension: 0.1,
+                    spanGaps: false,
+                    pointRadius: 2,
+                    pointHoverRadius: 4
+                });
+            });
+
+            environmentChart.data.labels = labels;
+            environmentChart.data.datasets = datasets;
+            environmentChart.update();
+        }
+
+        function groupDataByDevice(data) {
+            const groups = {};
+            data.forEach(reading => {
+                if (!groups[reading.address]) {
+                    groups[reading.address] = [];
+                }
+                groups[reading.address].push(reading);
+            });
+            return groups;
+        }
+
+        function startAutoRefresh() {
+            autoRefreshInterval = setInterval(() => {
+                refreshData();
+                loadDevices();
+            }, 30000); // 30 seconds
+        }
+
+        function toggleAutoRefresh() {
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+                autoRefreshInterval = null;
+                event.target.textContent = '▶️ Auto-Refresh';
+            } else {
+                startAutoRefresh();
+                event.target.textContent = '⏸️ Auto-Refresh';
+            }
+        }
+
+        // Theme Management
+        function initTheme() {
+            // Check for saved theme preference or default to system preference
+            const savedTheme = localStorage.getItem('theme');
+            const systemPreference = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            const theme = savedTheme || systemPreference;
+            
+            setTheme(theme);
+            
+            // Listen for system theme changes
+            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
+                if (!localStorage.getItem('theme')) {
+                    setTheme(e.matches ? 'dark' : 'light');
+                }
+            });
+        }
+
+        function setTheme(theme) {
+            document.documentElement.setAttribute('data-theme', theme);
+            const themeIcon = document.getElementById('theme-icon');
+            
+            if (theme === 'dark') {
+                themeIcon.textContent = '☀️';
+                localStorage.setItem('theme', 'dark');
+            } else {
+                themeIcon.textContent = '🌙';
+                localStorage.setItem('theme', 'light');
+            }
+            
+            // Update chart colors for dark mode
+            updateChartTheme(theme);
+        }
+
+        function toggleTheme() {
+            const currentTheme = document.documentElement.getAttribute('data-theme');
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            setTheme(newTheme);
+        }
+
+        function updateChartTheme(theme) {
+            if (!temperatureChart || !environmentChart) return;
+            
+            const isDark = theme === 'dark';
+            const textColor = isDark ? '#ffffff' : '#333333';
+            const gridColor = isDark ? '#404040' : '#e0e0e0';
+            
+            // Update chart options for theme
+            const chartOptions = {
+                plugins: {
+                    legend: {
+                        labels: {
+                            color: textColor
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        ticks: {
+                            color: textColor
+                        },
+                        grid: {
+                            color: gridColor
+                        },
+                        title: {
+                            color: textColor
+                        }
+                    },
+                    y: {
+                        ticks: {
+                            color: textColor
+                        },
+                        grid: {
+                            color: gridColor
+                        },
+                        title: {
+                            color: textColor
+                        }
+                    }
+                }
+            };
+            
+            // Update temperature chart
+            Object.assign(temperatureChart.options, chartOptions);
+            
+            // Update environment chart (with dual y-axes)
+            const envChartOptions = { ...chartOptions };
+            envChartOptions.scales.y1 = {
+                ...chartOptions.scales.y,
+                position: 'right',
+                grid: {
+                    drawOnChartArea: false,
+                }
+            };
+            Object.assign(environmentChart.options, envChartOptions);
+            
+            // Re-render charts
+            temperatureChart.update();
+            environmentChart.update();
+        }
+    </script>
+</body>
+</html>
