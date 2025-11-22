@@ -97,14 +97,15 @@ async def test_bluetooth():
                 format_name = {
                     0x03: "Format 3 (RAWv1)",
                     0x05: "Format 5 (RAWv2)",
+                    0x06: "Format 6 (Ruuvi Air)",
                     0xE1: "Format E1 (Extended v1)"
                 }.get(format_byte, f"Unknown format 0x{format_byte:02X}" if format_byte else "Unknown")
                 
                 print(f"   - {ruuvi['name'] or 'Unknown'} ({ruuvi['address']})")
                 print(f"     RSSI: {ruuvi['rssi']} dBm, Format: {format_name}")
                 
-                if format_byte != 0xE1:
-                    warnings.append(f"Device {ruuvi['address']} uses format 0x{format_byte:02X}, not E1")
+                if format_byte not in [0x06, 0xE1]:
+                    warnings.append(f"Device {ruuvi['address']} uses format 0x{format_byte:02X}, not Format 6 or E1")
         else:
             print(f"   ⚠ No Ruuvi devices found")
             warnings.append("No Ruuvi devices detected - check device is on and nearby")
