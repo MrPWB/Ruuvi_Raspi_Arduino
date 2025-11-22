@@ -29,7 +29,10 @@ async def test_bluetooth():
     print("\n2. Checking bleak library...")
     try:
         import bleak
-        print(f"   ✓ Bleak {bleak.__version__} installed")
+        if hasattr(bleak, '__version__'):
+            print(f"   ✓ Bleak {bleak.__version__} installed")
+        else:
+            print(f"   ✓ Bleak installed (version info not available)")
     except ImportError:
         print(f"   ✗ Bleak not found")
         errors.append("Bleak not installed - run: pip3 install bleak")
