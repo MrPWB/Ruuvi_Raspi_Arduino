@@ -1,0 +1,37 @@
+[Unit]
+Description=Ruuvi Format 6 BLE Scanner with ThingSpeak Upload
+Documentation=https://github.com/hellhammer/Ruuvi_Raspi_Arduino
+After=bluetooth.target network-online.target
+Wants=bluetooth.target network-online.target
+
+[Service]
+Type=simple
+User=hellhammer
+Group=hellhammer
+WorkingDirectory=/home/hellhammer/github/Ruuvi_Raspi_Arduino/RuuviAir
+
+# Use Python from venv with ThingSpeak integration
+ExecStart=/home/hellhammer/github/Ruuvi_Raspi_Arduino/venv/bin/python3 /home/hellhammer/github/Ruuvi_Raspi_Arduino/RuuviAir/ruuvi_format6_thingspeak.py --no-debug --thingspeak-interval 15
+
+# ThingSpeak API Key (set this!)
+Environment="THINGSPEAK_API_KEY=YOUR_API_KEY_HERE"
+
+# Restart settings
+Restart=always
+RestartSec=10
+
+# Environment
+Environment="PYTHONUNBUFFERED=1"
+Environment="PYTHONPATH=/home/hellhammer/github/Ruuvi_Raspi_Arduino/RuuviAir"
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ruuvi-thingspeak
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
