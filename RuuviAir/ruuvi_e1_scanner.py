@@ -7,6 +7,7 @@ Scans for Ruuvi devices broadcasting E1 format, decodes the data and stores it i
 import asyncio
 import struct
 import sqlite3
+import sys
 from datetime import datetime
 from typing import Optional, Dict, Any
 from bleak import BleakScanner
@@ -18,6 +19,9 @@ RUUVI_MANUFACTURER_ID = 0x0499
 
 # E1 Format identifier
 E1_FORMAT = 0xE1
+
+# Debug mode
+DEBUG = True
 
 
 class RuuviE1Decoder:
@@ -220,6 +224,40 @@ class RuuviScanner:
         self.db = db
         self.decoder = RuuviE1Decoder()
         self.last_sequences = {}  # Track last sequence per MAC to avoid duplicates
+        self.device_count = 0  # Count all detected devices
+        self.ruuvi_count = 0   # Count Ruuvi devices
+        self.e1_count = 0      # Count E1 format devices
+    
+    async def check_bluetooth(self):
+        """Check if Bluetooth adapter is available and working"""
+        print("\n" + "="*60)
+        print("BLUETOOTH SYSTEM CHECK")
+        print("="*60)
+        
+        try:
+            # Try to get available adapters
+            devices = await BleakScanner.discover(timeout=1.0, return_adv=False)
+            print(f"✓ Bluetooth adapter is working")
+            print(f"✓ Quick scan found {len(devices)} BLE device(s)")
+            
+            # Check Python version
+            print(f"✓ Python version: {sys.version.split()[0]}")
+            
+            # Check bleak version
+            import bleak
+            print(f"✓ Bleak version: {bleak.__version__}")
+            
+            print("="*60 + "\n")
+            return True
+            
+        except Exception as e:
+            print(f"✗ Bluetooth adapter check failed: {e}")
+            print("\nTroubleshooting:")
+            print("  1. Check if Bluetooth is enabled: bluetoothctl power on")
+            print("  2. Try running with sudo: sudo python3 ruuvi_e1_scanner.py")
+            print("  3. Check if bluetooth service is running: sudo systemctl status bluetooth")
+            print("="*60 + "\n")
+            return False
     
     def detection_callback(self, device: BLEDevice, advertisement_data: AdvertisementData):
         """
@@ -229,18 +267,59 @@ class RuuviScanner:
             device: Detected BLE device
             advertisement_data: Advertisement data
         """
+        self.device_count += 1
+        
+        if DEBUG:
+            print(f"\n[DEBUG] Device #{self.device_count}: {device.name or 'Unknown'} ({device.address})")
+            print(f"[DEBUG] RSSI: {advertisement_data.rssi if hasattr(advertisement_data, 'rssi') else 'N/A'} dBm")
+            
+            # Show all manufacturer data
+            if advertisement_data.manufacturer_data:
+                print(f"[DEBUG] Manufacturer data found:")
+                for mfg_id, data in advertisement_data.manufacturer_data.items():
+                    print(f"[DEBUG]   ID: 0x{mfg_id:04X} ({mfg_id})")
+                    print(f"[DEBUG]   Data length: {len(data)} bytes")
+                    print(f"[DEBUG]   Raw hex: {data.hex()}")
+                    if len(data) > 0:
+                        print(f"[DEBUG]   Format byte: 0x{data[0]:02X} ({data[0]})")
+            else:
+                print(f"[DEBUG] No manufacturer data")
+            
+            # Show service UUIDs
+            if advertisement_data.service_uuids:
+                print(f"[DEBUG] Service UUIDs: {advertisement_data.service_uuids}")
+        
         # Check if this is a Ruuvi device
         if RUUVI_MANUFACTURER_ID not in advertisement_data.manufacturer_data:
+            if DEBUG:
+                print(f"[DEBUG] Not a Ruuvi device (no 0x0499 manufacturer ID)")
             return
+        
+        self.ruuvi_count += 1
         
         # Get manufacturer data
         mfg_data = advertisement_data.manufacturer_data[RUUVI_MANUFACTURER_ID]
+        
+        if DEBUG:
+            print(f"[DEBUG] ✓ Ruuvi device detected!")
+            print(f"[DEBUG] Data format byte: 0x{mfg_data[0]:02X}")
         
         # Decode E1 format
         decoded = self.decoder.decode(mfg_data)
         
         if decoded is None:
+            if DEBUG:
+                if mfg_data[0] != E1_FORMAT:
+                    print(f"[DEBUG] ✗ Not E1 format (expected 0xE1, got 0x{mfg_data[0]:02X})")
+                    print(f"[DEBUG] This is likely format {mfg_data[0]} (Format 3=RAWv1, Format 5=RAWv2)")
+                else:
+                    print(f"[DEBUG] ✗ E1 format but decode failed (data too short?)")
             return
+        
+        self.e1_count += 1
+        
+        if DEBUG:
+            print(f"[DEBUG] ✓ E1 format successfully decoded!")
         
         # Check if this is a duplicate based on measurement sequence
         mac = decoded.get('mac') or device.address
@@ -284,9 +363,14 @@ class RuuviScanner:
         Args:
             duration: Scan duration in seconds (None for continuous)
         """
+        # Check Bluetooth first
+        if not await self.check_bluetooth():
+            return
+        
         scanner = BleakScanner(detection_callback=self.detection_callback)
         
         print("Starting Ruuvi E1 scanner...")
+        print("DEBUG MODE: All BLE devices will be shown")
         print("Press Ctrl+C to stop\n")
         
         if duration:
@@ -294,20 +378,56 @@ class RuuviScanner:
             await asyncio.sleep(duration)
             await scanner.stop()
         else:
-            # Continuous scanning
+            # Continuous scanning with periodic statistics
             await scanner.start()
             try:
+                counter = 0
                 while True:
-                    await asyncio.sleep(1)
+                    await asyncio.sleep(10)
+                    counter += 10
+                    
+                    # Print statistics every 30 seconds
+                    if counter % 30 == 0:
+                        print(f"\n{'='*60}")
+                        print(f"SCAN STATISTICS (after {counter} seconds)")
+                        print(f"{'='*60}")
+                        print(f"Total BLE devices detected: {self.device_count}")
+                        print(f"Ruuvi devices found: {self.ruuvi_count}")
+                        print(f"E1 format devices: {self.e1_count}")
+                        print(f"{'='*60}\n")
+                        
             except KeyboardInterrupt:
                 print("\nStopping scanner...")
+                print(f"\nFinal statistics:")
+                print(f"  Total BLE devices: {self.device_count}")
+                print(f"  Ruuvi devices: {self.ruuvi_count}")
+                print(f"  E1 format devices: {self.e1_count}")
                 await scanner.stop()
 
 
 async def main():
     """Main function"""
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='Ruuvi E1 BLE Scanner')
+    parser.add_argument('--no-debug', action='store_true', help='Disable debug output')
+    parser.add_argument('--db', default='ruuvi_data.db', help='Database file path')
+    args = parser.parse_args()
+    
+    # Set debug mode
+    global DEBUG
+    DEBUG = not args.no_debug
+    
+    if DEBUG:
+        print("\n" + "="*60)
+        print("RUUVI E1 SCANNER - DEBUG MODE ENABLED")
+        print("="*60)
+        print("All BLE devices will be shown with detailed information.")
+        print("To disable debug output, run with: --no-debug")
+        print("="*60 + "\n")
+    
     # Initialize database
-    db = RuuviDatabase('ruuvi_data.db')
+    db = RuuviDatabase(args.db)
     
     try:
         # Create scanner
