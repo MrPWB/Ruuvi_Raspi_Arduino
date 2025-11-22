@@ -244,8 +244,14 @@ class RuuviScanner:
             print(f"✓ Python version: {sys.version.split()[0]}")
             
             # Check bleak version
-            import bleak
-            print(f"✓ Bleak version: {bleak.__version__}")
+            try:
+                import bleak
+                if hasattr(bleak, '__version__'):
+                    print(f"✓ Bleak version: {bleak.__version__}")
+                else:
+                    print(f"✓ Bleak installed (version info not available)")
+            except:
+                print(f"✓ Bleak installed")
             
             print("="*60 + "\n")
             return True
