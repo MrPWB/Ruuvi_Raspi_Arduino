@@ -191,20 +191,17 @@ class RuuviDatabase:
     def create_tables(self):
         """Create database tables if they don't exist"""
         cursor = self.conn.cursor()
+        
+        # Create base table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS ruuvi_measurements (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 timestamp TEXT NOT NULL,
-                format TEXT,
                 mac TEXT,
-                mac_short TEXT,
                 temperature REAL,
                 humidity REAL,
                 pressure INTEGER,
-                pm1_0 REAL,
                 pm2_5 REAL,
-                pm4_0 REAL,
-                pm10_0 REAL,
                 co2 INTEGER,
                 voc INTEGER,
                 nox INTEGER,
@@ -214,6 +211,38 @@ class RuuviDatabase:
                 rssi INTEGER
             )
         ''')
+        
+        # Add columns for Format 6 if missing
+        try:
+            cursor.execute('ALTER TABLE ruuvi_measurements ADD COLUMN mac_short TEXT')
+            print("✓ Added mac_short column")
+        except sqlite3.OperationalError:
+            pass
+        
+        # Add columns for Format E1 if missing
+        try:
+            cursor.execute('ALTER TABLE ruuvi_measurements ADD COLUMN format TEXT')
+            print("✓ Added format column")
+        except sqlite3.OperationalError:
+            pass
+            
+        try:
+            cursor.execute('ALTER TABLE ruuvi_measurements ADD COLUMN pm1_0 REAL')
+            print("✓ Added pm1_0 column")
+        except sqlite3.OperationalError:
+            pass
+            
+        try:
+            cursor.execute('ALTER TABLE ruuvi_measurements ADD COLUMN pm4_0 REAL')
+            print("✓ Added pm4_0 column")
+        except sqlite3.OperationalError:
+            pass
+            
+        try:
+            cursor.execute('ALTER TABLE ruuvi_measurements ADD COLUMN pm10_0 REAL')
+            print("✓ Added pm10_0 column")
+        except sqlite3.OperationalError:
+            pass
         
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_timestamp ON ruuvi_measurements(timestamp)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_mac ON ruuvi_measurements(mac)')

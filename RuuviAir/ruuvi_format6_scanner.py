@@ -144,12 +144,13 @@ class RuuviDatabase:
     def create_tables(self):
         """Create database tables if they don't exist"""
         cursor = self.conn.cursor()
+        
+        # Create table with new schema
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS ruuvi_measurements (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 timestamp TEXT NOT NULL,
                 mac TEXT,
-                mac_short TEXT,
                 temperature REAL,
                 humidity REAL,
                 pressure INTEGER,
@@ -164,13 +165,21 @@ class RuuviDatabase:
             )
         ''')
         
-        # Create index on timestamp for faster queries
+        # Add mac_short column if it doesn't exist (for Format 6)
+        try:
+            cursor.execute('ALTER TABLE ruuvi_measurements ADD COLUMN mac_short TEXT')
+            self.conn.commit()
+            print("✓ Added mac_short column to database")
+        except sqlite3.OperationalError:
+            # Column already exists
+            pass
+        
+        # Create indexes
         cursor.execute('''
             CREATE INDEX IF NOT EXISTS idx_timestamp 
             ON ruuvi_measurements(timestamp)
         ''')
         
-        # Create index on MAC address
         cursor.execute('''
             CREATE INDEX IF NOT EXISTS idx_mac 
             ON ruuvi_measurements(mac)
