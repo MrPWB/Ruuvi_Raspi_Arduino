@@ -1,0 +1,33 @@
+[Unit]
+Description=Ruuvi Format 6 BLE Scanner
+Documentation=https://github.com/hellhammer/Ruuvi_Raspi_Arduino
+After=bluetooth.target network.target
+Wants=bluetooth.target
+
+[Service]
+Type=simple
+User=hellhammer
+Group=hellhammer
+WorkingDirectory=/home/hellhammer/github/Ruuvi_Raspi_Arduino/RuuviAir
+
+# Use Python from venv
+ExecStart=/home/hellhammer/github/Ruuvi_Raspi_Arduino/venv/bin/python3 /home/hellhammer/github/Ruuvi_Raspi_Arduino/RuuviAir/ruuvi_format6_scanner.py --no-debug
+
+# Restart settings
+Restart=always
+RestartSec=10
+
+# Environment
+Environment="PYTHONUNBUFFERED=1"
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ruuvi-scanner
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
